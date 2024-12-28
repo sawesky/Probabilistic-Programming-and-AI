@@ -29,10 +29,18 @@ def main(args):
             )
         )
 
-        # Dataset
-        datasets, dataloaders, dataset_sizes = get_data(
-            num_quadrant_inputs=num_quadrant_inputs, batch_size=128
-        )
+        if args.dataset == "mnist":
+            # Dataset
+            datasets, dataloaders, dataset_sizes = get_data(
+                num_quadrant_inputs=num_quadrant_inputs, batch_size=128
+            )
+        elif args.dataset == "cifar10":
+            # Dataset
+            datasets, dataloaders, dataset_sizes = get_data(
+                num_quadrant_inputs=num_quadrant_inputs,
+                batch_size=128,
+                dataset_name="cifar10",
+            )
 
         # Train baseline
         baseline_net = baseline.train(
@@ -131,6 +139,13 @@ if __name__ == "__main__":
         default=10,
         type=int,
         help="n of particles to estimate logpθ(y|x,z) in ELBO",
+    )
+    parser.add_argument(
+        "-d",
+        "--dataset",
+        default="mnist",
+        type=str,
+        help="dataset to use (mnist or cifar10)",
     )
     args = parser.parse_args()
 

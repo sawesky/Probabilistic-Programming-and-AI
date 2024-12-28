@@ -18,11 +18,16 @@ class CVAEMNIST(Dataset):
         return len(self.original)
 
     def __getitem__(self, item):
+        # print(self.original)
+        # print(self.original[item])
+        # print(self.original)
         image, digit = self.original[item]
         sample = {"original": image, "digit": digit}
         if self.transform:
             sample = self.transform(sample)
 
+        print("sample")
+        print(sample)
         return sample
 
 
@@ -74,7 +79,7 @@ class MaskImages:
         return sample
 
 
-def get_data(num_quadrant_inputs, batch_size):
+def get_data_MNIST(num_quadrant_inputs, batch_size):
     transforms = Compose(
         [ToTensor(), MaskImages(num_quadrant_inputs=num_quadrant_inputs)]
     )

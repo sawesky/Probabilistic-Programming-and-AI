@@ -8,12 +8,27 @@ import numpy as np
 import pandas as pd
 import torch
 from baseline import MaskedBCELoss
-from mnist import get_data
+from mnist import get_data_MNIST
+from cifar import get_data_CIFAR
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from pyro.infer import Predictive, Trace_ELBO
+
+def get_data(num_quadrant_inputs, batch_size, dataset_name="mnist"):
+    if dataset_name == "mnist":
+        datasets, dataloaders, dataset_sizes = get_data_MNIST(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
+        )
+    elif dataset_name == "cifar10":
+        datasets, dataloaders, dataset_sizes = get_data_CIFAR(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
+        )
+    else:
+        raise ValueError("Dataset not supported")
+
+    return datasets, dataloaders, dataset_sizes
 
 
 def imshow(inp, image_path=None):
