@@ -51,6 +51,7 @@ def main(args):
             num_epochs=args.num_epochs,
             early_stop_patience=args.early_stop_patience,
             model_path="baseline_net_q{}.pth".format(num_quadrant_inputs),
+            dataset=args.dataset,
         )
 
         # Train CVAE
@@ -63,6 +64,7 @@ def main(args):
             early_stop_patience=args.early_stop_patience,
             model_path="cvae_net_q{}.pth".format(num_quadrant_inputs),
             pre_trained_baseline_net=baseline_net,
+            dataset=args.dataset,
         )
 
         # Visualize conditional predictions

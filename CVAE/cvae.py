@@ -12,6 +12,42 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 
+class EncoderCIFAR10(nn.Module):
+    def __init__(self, z_dim, hidden_1, hidden_2):
+        super().__init__()
+        self.fc1 = nn.Linear(3072, hidden_1)  # Adjusted input size for CIFAR-10
+        self.fc2 = nn.Linear(hidden_1, hidden_2)
+        self.fc31 = nn.Linear(hidden_2, z_dim)
+        self.fc32 = nn.Linear(hidden_2, z_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, y):
+        # Combine x and y for processing
+        xc = x.clone()
+        xc[x == -1] = y[x == -1]
+        xc = xc.view(-1, 3072)  # Flatten CIFAR-10 images
+        hidden = self.relu(self.fc1(xc))
+        hidden = self.relu(self.fc2(hidden))
+        z_loc = self.fc31(hidden)
+        z_scale = torch.exp(self.fc32(hidden))
+        return z_loc, z_scale
+
+
+class DecoderCIFAR10(nn.Module):
+    def __init__(self, z_dim, hidden_1, hidden_2):
+        super().__init__()
+        self.fc1 = nn.Linear(z_dim, hidden_1)
+        self.fc2 = nn.Linear(hidden_1, hidden_2)
+        self.fc3 = nn.Linear(hidden_2, 3072)  # Adjusted output size for CIFAR-10
+        self.relu = nn.ReLU()
+
+    def forward(self, z):
+        y = self.relu(self.fc1(z))
+        y = self.relu(self.fc2(y))
+        y = torch.sigmoid(self.fc3(y))
+        return y.view(-1, 3, 32, 32)  # Reshape to CIFAR-10 dimensions
+
+
 
 class Encoder(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2):
@@ -50,7 +86,56 @@ class Decoder(nn.Module):
         y = self.relu(self.fc2(y))
         y = torch.sigmoid(self.fc3(y))
         return y
+    
+class CVAECIFAR(nn.Module):
+    def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
+        super().__init__()
+        self.baseline_net = pre_trained_baseline_net
+        self.prior_net = EncoderCIFAR10(z_dim, hidden_1, hidden_2)
+        self.generation_net = DecoderCIFAR10(z_dim, hidden_1, hidden_2)
+        self.recognition_net = EncoderCIFAR10(z_dim, hidden_1, hidden_2)
 
+    def model(self, xs, ys=None):
+        pyro.module("generation_net", self)
+        batch_size = xs.shape[0]
+        with pyro.plate("data"):
+            # Generate initial guess using baseline network
+            with torch.no_grad():
+                y_hat = self.baseline_net(xs).view(batch_size, 3, 32, 32)
+
+            # Sample latent variable z from prior
+            prior_loc, prior_scale = self.prior_net(xs, y_hat)
+            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
+
+            # Generate output image loc from z
+            loc = self.generation_net(zs)
+
+            if ys is not None:
+                # In training, only evaluate loss on masked pixels
+                mask_loc = loc[xs == -1].view(batch_size, -1)
+                mask_ys = ys[xs == -1].view(batch_size, -1)
+                pyro.sample(
+                    "y",
+                    dist.Bernoulli(mask_loc, validate_args=False).to_event(1),
+                    obs=mask_ys,
+                )
+            else:
+                # In testing, return probabilities for visualization
+                pyro.deterministic("y", loc.detach())
+
+            return loc
+
+    def guide(self, xs, ys=None):
+        with pyro.plate("data"):
+            if ys is None:
+                # Inference uses the prior network
+                y_hat = self.baseline_net(xs).view(xs.shape)
+                loc, scale = self.prior_net(xs, y_hat)
+            else:
+                # Training uses the recognition network
+                loc, scale = self.recognition_net(xs, ys)
+
+            pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
 class CVAE(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
@@ -128,11 +213,17 @@ def train(
     early_stop_patience,
     model_path,
     pre_trained_baseline_net,
+    dataset
 ):
     # clear param store
     pyro.clear_param_store()
 
-    cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
+    if dataset == "mnist":
+        cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
+    elif dataset == "cifar10":
+        cvae_net = CVAECIFAR(200, 500, 500, pre_trained_baseline_net)
+    else:
+        raise ValueError("Dataset not supported")
     cvae_net.to(device)
     optimizer = pyro.optim.Adam({"lr": learning_rate})
     svi = SVI(cvae_net.model, cvae_net.guide, optimizer, loss=Trace_ELBO())

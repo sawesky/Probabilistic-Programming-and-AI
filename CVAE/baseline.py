@@ -26,6 +26,21 @@ class BaselineNet(nn.Module):
         y = torch.sigmoid(self.fc3(hidden))
         return y
 
+class BaselineNetCIFAR10(nn.Module):
+    def __init__(self, hidden_1, hidden_2):
+        super().__init__()
+        self.fc1 = nn.Linear(3072, hidden_1)  # Input size updated for CIFAR-10
+        self.fc2 = nn.Linear(hidden_1, hidden_2)
+        self.fc3 = nn.Linear(hidden_2, 3072)  # Output size updated for CIFAR-10
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = x.view(-1, 3072)  # Flatten CIFAR-10 images
+        hidden = self.relu(self.fc1(x))
+        hidden = self.relu(self.fc2(hidden))
+        y = torch.sigmoid(self.fc3(hidden))
+        return y
+
 
 class MaskedBCELoss(nn.Module):
     def __init__(self, masked_with=-1):
@@ -51,9 +66,13 @@ def train(
     num_epochs,
     early_stop_patience,
     model_path,
+    dataset
 ):
     # Train baseline
-    baseline_net = BaselineNet(500, 500)
+    if dataset == "mnist":
+        baseline_net = BaselineNet(500, 500)
+    elif dataset == "cifar10":
+        baseline_net = BaselineNetCIFAR10(500, 500)
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
     criterion = MaskedBCELoss()

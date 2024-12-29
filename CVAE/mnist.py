@@ -18,16 +18,11 @@ class CVAEMNIST(Dataset):
         return len(self.original)
 
     def __getitem__(self, item):
-        # print(self.original)
-        # print(self.original[item])
-        # print(self.original)
         image, digit = self.original[item]
         sample = {"original": image, "digit": digit}
         if self.transform:
             sample = self.transform(sample)
 
-        print("sample")
-        print(sample)
         return sample
 
 

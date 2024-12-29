@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from baseline import MaskedBCELoss
 from mnist import get_data_MNIST
-from cifar import get_data_CIFAR
+from cifar import get_data_CIFAR10
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 from tqdm import tqdm
@@ -22,7 +22,7 @@ def get_data(num_quadrant_inputs, batch_size, dataset_name="mnist"):
             num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
         )
     elif dataset_name == "cifar10":
-        datasets, dataloaders, dataset_sizes = get_data_CIFAR(
+        datasets, dataloaders, dataset_sizes = get_data_CIFAR10(
             num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
         )
     else:
