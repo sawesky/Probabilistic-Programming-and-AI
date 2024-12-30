@@ -51,6 +51,84 @@ def imshow(inp, image_path=None):
         plt.show()
 
     plt.clf()
+    
+def imshowCIFAR10(inp, image_path=None):
+    # plot images for CIFAR-10
+    inp = inp.cpu().numpy().transpose((1, 2, 0))  # (C, H, W) -> (H, W, C)
+    inp = np.clip(inp, 0, 1)  # Ensure valid pixel range
+    space = np.ones((inp.shape[0], 50, inp.shape[2]))
+    inp = np.concatenate([space, inp], axis=1)
+
+    ax = plt.axes(frameon=False, xticks=[], yticks=[])
+    ax.text(0, 23, "Inputs:")
+    ax.text(0, 23 + 32 + 3, "Truth:")
+    ax.text(0, 23 + (32 + 3) * 2, "NN:")
+    ax.text(0, 23 + (32 + 3) * 3, "CVAE:")
+    ax.imshow(inp)
+
+    if image_path is not None:
+        Path(image_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(image_path, bbox_inches="tight", pad_inches=0.1)
+    else:
+        plt.show()
+
+    plt.clf()
+    
+def visualizeCIFAR10(
+    device,
+    num_quadrant_inputs,
+    pre_trained_baseline,
+    pre_trained_cvae,
+    num_images,
+    num_samples,
+    image_path=None,
+):
+    datasets, _, _ = get_data(
+        num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images, dataset_name="cifar10"
+    )
+    dataloader = DataLoader(datasets["val"], batch_size=num_images, shuffle=True)
+
+    batch = next(iter(dataloader))
+    inputs = batch["input"].to(device)
+    outputs = batch["output"].to(device)
+    originals = batch["original"].to(device)
+
+    with torch.no_grad():
+        baseline_preds = pre_trained_baseline(inputs).view(outputs.shape)
+
+    predictive = Predictive(
+        pre_trained_cvae.model, guide=pre_trained_cvae.guide, num_samples=num_samples
+    )
+    cvae_preds = predictive(inputs)["y"].view(num_samples, num_images, 3, 32, 32)
+
+    # Apply the masking logic for RGB images
+    baseline_preds[outputs == -1] = inputs[outputs == -1]
+    for i in range(cvae_preds.shape[0]):
+        cvae_preds[i][outputs == -1] = inputs[outputs == -1]
+
+    # Make grid adjustments for RGB
+    inputs_tensor = make_grid(inputs, nrow=num_images, padding=0)
+    originals_tensor = make_grid(originals, nrow=num_images, padding=0)
+    baseline_tensor = make_grid(baseline_preds, nrow=num_images, padding=0)
+    cvae_tensor = make_grid(cvae_preds.view(-1, 3, 32, 32), nrow=num_images, padding=0)
+
+    separator_tensor = torch.ones((3, 5, originals_tensor.shape[-1])).to(device)
+
+    grid_tensor = torch.cat(
+        [
+            inputs_tensor,
+            separator_tensor,
+            originals_tensor,
+            separator_tensor,
+            baseline_tensor,
+            separator_tensor,
+            cvae_tensor,
+        ],
+        dim=1,
+    )
+
+    imshow(grid_tensor, image_path=image_path)
+
 
 
 def visualize(
@@ -125,6 +203,53 @@ def visualize(
     )
     # plot tensors
     imshow(grid_tensor, image_path=image_path)
+    
+def generate_table_CIFAR10(
+    device,
+    num_quadrant_inputs,
+    pre_trained_baseline,
+    pre_trained_cvae,
+    num_particles,
+    col_name,
+    dataset_name="cifar10",
+):
+    # Load data
+    datasets, dataloaders, dataset_sizes = get_data(
+        num_quadrant_inputs=num_quadrant_inputs, batch_size=32, dataset_name=dataset_name
+    )
+
+    # Define loss functions
+    criterion = MaskedBCELoss()  # Ensure it supports multi-channel images
+    loss_fn = Trace_ELBO(num_particles=num_particles).differentiable_loss
+
+    baseline_cll = 0.0
+    cvae_mc_cll = 0.0
+    num_preds = 0
+
+    df = pd.DataFrame(index=["NN (baseline)", "CVAE (Monte Carlo)"], columns=[col_name])
+
+    # Iterate over validation data
+    bar = tqdm(dataloaders["val"], desc="Generating predictions".ljust(20))
+    for batch in bar:
+        inputs = batch["input"].to(device)  # Shape: (batch_size, 3, 32, 32)
+        outputs = batch["output"].to(device)  # Shape: (batch_size, 3, 32, 32)
+        num_preds += 1
+
+        # Compute negative log-likelihood for baseline NN
+        with torch.no_grad():
+            preds = pre_trained_baseline(inputs).view(outputs.shape)  # Ensure shape matches outputs
+        baseline_cll += criterion(preds, outputs).item() / inputs.size(0)
+
+        # Compute the negative conditional log-likelihood for the CVAE
+        cvae_mc_cll += loss_fn(
+            pre_trained_cvae.model, pre_trained_cvae.guide, inputs, outputs
+        ).detach().item() / inputs.size(0)
+
+    # Calculate average losses
+    df.iloc[0, 0] = baseline_cll / num_preds
+    df.iloc[1, 0] = cvae_mc_cll / num_preds
+    return df
+
 
 
 def generate_table(

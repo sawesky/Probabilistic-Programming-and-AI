@@ -7,7 +7,7 @@ import baseline
 import cvae
 import pandas as pd
 import torch
-from util import generate_table, get_data, visualize
+from util import generate_table, get_data, visualize, visualizeCIFAR10, generate_table_CIFAR10
 
 import pyro
 
@@ -68,25 +68,52 @@ def main(args):
         )
 
         # Visualize conditional predictions
-        visualize(
-            device=device,
-            num_quadrant_inputs=num_quadrant_inputs,
-            pre_trained_baseline=baseline_net,
-            pre_trained_cvae=cvae_net,
-            num_images=args.num_images,
-            num_samples=args.num_samples,
-            image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
-        )
+        if args.dataset == "mnist":
+            visualize(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_images=args.num_images,
+                num_samples=args.num_samples,
+                image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
+            )
+        elif args.dataset == "cifar10":
+            visualizeCIFAR10(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_images=args.num_images,
+                num_samples=args.num_samples,
+                image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
+            )
+        else:
+            raise ValueError("Dataset not supported")
 
-        # Retrieve conditional log likelihood
-        df = generate_table(
-            device=device,
-            num_quadrant_inputs=num_quadrant_inputs,
-            pre_trained_baseline=baseline_net,
-            pre_trained_cvae=cvae_net,
-            num_particles=args.num_particles,
-            col_name="{} quadrant{}".format(num_quadrant_inputs, maybes),
-        )
+
+        if args.dataset == "mnist":
+            # Retrieve conditional log likelihood
+            df = generate_table(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_particles=args.num_particles,
+                col_name="{} quadrant{}".format(num_quadrant_inputs, maybes),
+            )
+        elif args.dataset == "cifar10":
+            # Retrieve conditional log likelihood
+            df = generate_table_CIFAR10(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_particles=args.num_particles,
+                col_name="{} quadrant{}".format(num_quadrant_inputs, maybes),
+            )
+        else:
+            raise ValueError("Dataset not supported")
         results.append(df)
         columns.append("{} quadrant{}".format(num_quadrant_inputs, maybes))
 
