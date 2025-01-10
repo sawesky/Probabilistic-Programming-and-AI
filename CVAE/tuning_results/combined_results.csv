@@ -1,6 +1,6 @@
 file,aggregate_gap
 lr_0.001_epochs_50_particles_20.csv,175.6495369183432
+lr_0.001_epochs_101_particles_20.csv,171.27170156434345
 lr_0.001_epochs_50_particles_10.csv,170.88472223710087
 lr_0.001_epochs_101_particles_10.csv,168.23948362307817
 lr_0.0001_epochs_50_particles_10.csv,168.06322910686652
-lr_0.001_epochs_101_particles_20.csv,135.23066469876946
