@@ -116,6 +116,8 @@ def main(args):
             raise ValueError("Dataset not supported")
         results.append(df)
         columns.append("{} quadrant{}".format(num_quadrant_inputs, maybes))
+        print("Df: ", df)
+        print("Columns: ", columns)
 
     results = pd.concat(results, axis=1, ignore_index=True)
     results.columns = columns
