@@ -213,7 +213,10 @@ def train(
     early_stop_patience,
     model_path,
     pre_trained_baseline_net,
-    dataset
+    dataset,
+    z_dim=200,
+    hidden_1=500,
+    hidden_2=500
 ):
     # clear param store
     pyro.clear_param_store()
@@ -223,7 +226,7 @@ def train(
     elif dataset == "cifar10":
         cvae_net = CVAECIFAR(200, 500, 500, pre_trained_baseline_net)
     elif dataset == "fashionmnist":
-        cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
+        cvae_net = CVAE(z_dim, hidden_1, hidden_2, pre_trained_baseline_net)
     else:
         raise ValueError("Dataset not supported")
     cvae_net.to(device)
