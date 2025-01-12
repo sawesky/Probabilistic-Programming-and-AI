@@ -74,6 +74,9 @@ def main(args):
             model_path="cvae_net_q{}.pth".format(num_quadrant_inputs),
             pre_trained_baseline_net=baseline_net,
             dataset=args.dataset,
+            z_dim=args.z_dim,
+            hidden_1=args.hidden_1,
+            hidden_2=args.hidden_2
         )
 
         # Visualize conditional predictions
@@ -207,7 +210,16 @@ if __name__ == "__main__":
         "--dataset",
         default="mnist",
         type=str,
-        help="dataset to use (mnist or cifar10)",
+        help="dataset to use (mnist or cifar10 or fashionmnist)",
+    )
+    parser.add_argument(
+        "-zd", "--z-dim", default=200, type=int, help="latent dimension size"
+    )
+    parser.add_argument(
+        "-h1", "--hidden-1", default=500, type=int, help="first hidden layer"
+    )
+    parser.add_argument(
+        "-h2", "--hidden-2", default=500, type=int, help="second hidden layer"
     )
     args = parser.parse_args()
 
