@@ -41,6 +41,15 @@ def main(args):
                 batch_size=128,
                 dataset_name="cifar10",
             )
+        elif args.dataset == "fashionmnist":
+            # Dataset
+            datasets, dataloaders, dataset_sizes = get_data(
+                num_quadrant_inputs=num_quadrant_inputs,
+                batch_size=128,
+                dataset_name="fashionmnist",
+            )
+        else:
+            raise ValueError("Dataset not supported")
 
         # Train baseline
         baseline_net = baseline.train(
@@ -88,6 +97,17 @@ def main(args):
                 num_samples=args.num_samples,
                 image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
             )
+        elif args.dataset == "fashionmnist":
+            visualize(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_images=args.num_images,
+                num_samples=args.num_samples,
+                image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
+                dataset="fashionmnist",
+            )
         else:
             raise ValueError("Dataset not supported")
 
@@ -111,6 +131,17 @@ def main(args):
                 pre_trained_cvae=cvae_net,
                 num_particles=args.num_particles,
                 col_name="{} quadrant{}".format(num_quadrant_inputs, maybes),
+            )
+        elif args.dataset == "fashionmnist":
+            # Retrieve conditional log likelihood
+            df = generate_table(
+                device=device,
+                num_quadrant_inputs=num_quadrant_inputs,
+                pre_trained_baseline=baseline_net,
+                pre_trained_cvae=cvae_net,
+                num_particles=args.num_particles,
+                col_name="{} quadrant{}".format(num_quadrant_inputs, maybes),
+                dataset="fashionmnist",
             )
         else:
             raise ValueError("Dataset not supported")

@@ -73,6 +73,10 @@ def train(
         baseline_net = BaselineNet(500, 500)
     elif dataset == "cifar10":
         baseline_net = BaselineNetCIFAR10(500, 500)
+    elif dataset == "fashionmnist":
+        baseline_net = BaselineNet(500, 500)
+    else:
+        raise ValueError("Dataset not supported")
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
     criterion = MaskedBCELoss()
