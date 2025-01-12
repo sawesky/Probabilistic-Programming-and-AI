@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 from baseline import MaskedBCELoss
-from mnist import get_data_MNIST
+from mnist import get_data_MNIST, get_data_FashionMNIST
 from cifar import get_data_CIFAR10
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
@@ -23,6 +23,10 @@ def get_data(num_quadrant_inputs, batch_size, dataset_name="mnist"):
         )
     elif dataset_name == "cifar10":
         datasets, dataloaders, dataset_sizes = get_data_CIFAR10(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
+        )
+    elif dataset_name == "fashionmnist":
+        datasets, dataloaders, dataset_sizes = get_data_FashionMNIST(
             num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
         )
     else:
@@ -139,11 +143,20 @@ def visualize(
     num_images,
     num_samples,
     image_path=None,
+    dataset="mnist",
 ):
-    # Load sample random data
-    datasets, _, dataset_sizes = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images
-    )
+    if dataset == "mnist":
+        # Load sample random data
+        datasets, _, dataset_sizes = get_data(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images
+        )
+    elif dataset == "fashionmnist":
+        # Load sample random data
+        datasets, _, dataset_sizes = get_data(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images, dataset_name="fashionmnist"
+        )
+    else:
+        raise ValueError("Dataset not supported")
     dataloader = DataLoader(datasets["val"], batch_size=num_images, shuffle=True)
 
     batch = next(iter(dataloader))
@@ -259,11 +272,20 @@ def generate_table(
     pre_trained_cvae,
     num_particles,
     col_name,
+    dataset="mnist",
 ):
-    # Load sample random data
-    datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=32
-    )
+    if dataset == "mnist":
+        # Load sample random data
+        datasets, dataloaders, dataset_sizes = get_data(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=32
+        )
+    elif dataset == "fashionmnist":
+        # Load sample random data
+        datasets, dataloaders, dataset_sizes = get_data(
+            num_quadrant_inputs=num_quadrant_inputs, batch_size=32, dataset_name="fashionmnist"
+        )
+    else:
+        raise ValueError("Dataset not supported")
 
     # Load sample data
     criterion = MaskedBCELoss()

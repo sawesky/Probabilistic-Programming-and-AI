@@ -222,6 +222,8 @@ def train(
         cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
     elif dataset == "cifar10":
         cvae_net = CVAECIFAR(200, 500, 500, pre_trained_baseline_net)
+    elif dataset == "fashionmnist":
+        cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
     else:
         raise ValueError("Dataset not supported")
     cvae_net.to(device)

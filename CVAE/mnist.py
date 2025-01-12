@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import Compose, functional
 
 from pyro.contrib.examples.util import MNIST
+from torchvision.datasets import FashionMNIST
 
 
 class CVAEMNIST(Dataset):
@@ -81,6 +82,41 @@ def get_data_MNIST(num_quadrant_inputs, batch_size):
     datasets, dataloaders, dataset_sizes = {}, {}, {}
     for mode in ["train", "val"]:
         datasets[mode] = CVAEMNIST(
+            "../data", download=True, transform=transforms, train=mode == "train"
+        )
+        dataloaders[mode] = DataLoader(
+            datasets[mode],
+            batch_size=batch_size,
+            shuffle=mode == "train",
+            num_workers=0,
+        )
+        dataset_sizes[mode] = len(datasets[mode])
+
+    return datasets, dataloaders, dataset_sizes
+
+def get_data_FashionMNIST(num_quadrant_inputs, batch_size):
+
+    class CVAEFashionMNIST(Dataset):
+        def __init__(self, root, train=True, transform=None, download=False):
+            self.original = FashionMNIST(root, train=train, download=download)
+            self.transform = transform
+
+        def __len__(self):
+            return len(self.original)
+
+        def __getitem__(self, item):
+            image, label = self.original[item]
+            sample = {"original": image, "digit": label}
+            if self.transform:
+                sample = self.transform(sample)
+            return sample
+
+    transforms = Compose(
+        [ToTensor(), MaskImages(num_quadrant_inputs=num_quadrant_inputs)]
+    )
+    datasets, dataloaders, dataset_sizes = {}, {}, {}
+    for mode in ["train", "val"]:
+        datasets[mode] = CVAEFashionMNIST(
             "../data", download=True, transform=transforms, train=mode == "train"
         )
         dataloaders[mode] = DataLoader(
