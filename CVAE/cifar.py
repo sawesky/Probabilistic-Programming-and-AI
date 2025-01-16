@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import random
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, functional
@@ -63,14 +64,101 @@ class MaskImages:
         return sample
 
 
-def get_data_CIFAR10(num_quadrant_inputs, batch_size):
-    transforms = Compose(
-        [ToTensor(), MaskImages(num_quadrant_inputs=num_quadrant_inputs)]
+class RandomlyMaskImages:
+    """This transformation masks 1 randomly selected square on a 2x2 grid for each quadrant."""
+
+    def __init__(self, num_quadrant_inputs, mask_with=-1):
+        if num_quadrant_inputs <= 0 or num_quadrant_inputs > 4:
+            raise ValueError(
+                "Number of quadrants as inputs must be 1, 2, 3, or 4"
+            )
+        self.num = num_quadrant_inputs
+        self.mask_with = mask_with
+
+    def __call__(self, sample):
+        tensor = sample["original"]
+        out = tensor.clone()
+        _, h, w = tensor.shape
+
+        # Define the quadrants
+        quadrants = [
+            (0, h // 2, 0, w // 2),  # Top left
+            (0, h // 2, w // 2, w),  # Top right
+            (h // 2, h, 0, w // 2),  # Bottom left
+            (h // 2, h, w // 2, w),  # Bottom right
+        ]
+
+        selected_patches = set()
+
+        # Mask 1 random square in each 2x2 grid within each quadrant
+        for i in range(self.num):
+            for q in quadrants:
+                grid_size = h // 4
+                # Define the 2x2 grid within the quadrant
+                grid_positions = [
+                    (
+                        q[0],
+                        q[0] + grid_size,
+                        q[2],
+                        q[2] + grid_size,
+                    ),  # Top left of quadrant
+                    (
+                        q[0],
+                        q[0] + grid_size,
+                        q[2] + grid_size,
+                        q[3],
+                    ),  # Top right of quadrant
+                    (
+                        q[0] + grid_size,
+                        q[1],
+                        q[2],
+                        q[2] + grid_size,
+                    ),  # Bottom left of quadrant
+                    (
+                        q[0] + grid_size,
+                        q[1],
+                        q[2] + grid_size,
+                        q[3],
+                    ),  # Bottom right of quadrant
+                ]
+                # Select one of the 4 squares to mask
+                while True:
+                    selected_grid = random.choice(grid_positions)
+                    if selected_grid not in selected_patches:
+                        selected_patches.add(selected_grid)
+                        y_start, y_end, x_start, x_end = selected_grid
+                        out[:, y_start:y_end, x_start:x_end] = self.mask_with
+                        break
+
+        # Set the input as complementary
+        inp = tensor.clone()
+        inp[out != self.mask_with] = self.mask_with
+
+        sample["input"] = inp
+        sample["output"] = out
+        return sample
+
+
+def get_data_CIFAR10(num_quadrant_inputs, batch_size, random_mask=False):
+    transforms = (
+        Compose(
+            [ToTensor(), MaskImages(num_quadrant_inputs=num_quadrant_inputs)]
+        )
+        if not random_mask
+        else Compose(
+            [
+                ToTensor(),
+                RandomlyMaskImages(num_quadrant_inputs=num_quadrant_inputs),
+            ]
+        )
     )
     datasets, dataloaders, dataset_sizes = {}, {}, {}
     for mode in ["train", "val"]:
         datasets[mode] = CVAECIFAR10(
-            "../data", download=True, transform=transforms, train=mode == "train"
+            "../data",
+            download=True,
+            transform=transforms,
+            train=mode == "train",
         )
         dataloaders[mode] = DataLoader(
             datasets[mode],

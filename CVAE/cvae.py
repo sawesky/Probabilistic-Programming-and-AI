@@ -12,6 +12,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 
+
 class EncoderCIFAR10(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2):
         super().__init__()
@@ -38,7 +39,9 @@ class DecoderCIFAR10(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(z_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_1, hidden_2)
-        self.fc3 = nn.Linear(hidden_2, 3072)  # Adjusted output size for CIFAR-10
+        self.fc3 = nn.Linear(
+            hidden_2, 3072
+        )  # Adjusted output size for CIFAR-10
         self.relu = nn.ReLU()
 
     def forward(self, z):
@@ -46,7 +49,6 @@ class DecoderCIFAR10(nn.Module):
         y = self.relu(self.fc2(y))
         y = torch.sigmoid(self.fc3(y))
         return y.view(-1, 3, 32, 32)  # Reshape to CIFAR-10 dimensions
-
 
 
 class Encoder(nn.Module):
@@ -86,7 +88,8 @@ class Decoder(nn.Module):
         y = self.relu(self.fc2(y))
         y = torch.sigmoid(self.fc3(y))
         return y
-    
+
+
 class CVAECIFAR(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
@@ -105,7 +108,9 @@ class CVAECIFAR(nn.Module):
 
             # Sample latent variable z from prior
             prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
+            zs = pyro.sample(
+                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
+            )
 
             # Generate output image loc from z
             loc = self.generation_net(zs)
@@ -137,6 +142,7 @@ class CVAECIFAR(nn.Module):
 
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
+
 class CVAE(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
@@ -165,7 +171,9 @@ class CVAE(nn.Module):
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.
             prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
+            zs = pyro.sample(
+                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
+            )
 
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
@@ -216,7 +224,7 @@ def train(
     dataset,
     z_dim=200,
     hidden_1=500,
-    hidden_2=500
+    hidden_2=500,
 ):
     # clear param store
     pyro.clear_param_store()
