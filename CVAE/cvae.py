@@ -12,6 +12,7 @@ import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 
+
 class EncoderCIFAR10(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2):
         super().__init__()
@@ -38,7 +39,9 @@ class DecoderCIFAR10(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(z_dim, hidden_1)
         self.fc2 = nn.Linear(hidden_1, hidden_2)
-        self.fc3 = nn.Linear(hidden_2, 3072)  # Adjusted output size for CIFAR-10
+        self.fc3 = nn.Linear(
+            hidden_2, 3072
+        )  # Adjusted output size for CIFAR-10
         self.relu = nn.ReLU()
 
     def forward(self, z):
@@ -47,6 +50,60 @@ class DecoderCIFAR10(nn.Module):
         y = torch.sigmoid(self.fc3(y))
         return y.view(-1, 3, 32, 32)  # Reshape to CIFAR-10 dimensions
 
+
+class EncoderCIFAR10Conv(nn.Module):
+    def __init__(self, z_dim):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=4, stride=2, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.fc1 = nn.Linear(128 * 4 * 4, z_dim)
+        self.fc2 = nn.Linear(128 * 4 * 4, z_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x, y):
+        # Combine x and y for processing
+        xc = x.clone()
+        xc[x == -1] = y[x == -1]
+        xc = self.relu(self.bn1(self.conv1(xc)))
+        xc = self.relu(self.bn2(self.conv2(xc)))
+        xc = self.relu(self.bn3(self.conv3(xc)))
+        xc = xc.view(xc.size(0), -1)  # Flatten
+        z_loc = self.fc1(xc)
+        z_scale = torch.exp(self.fc2(xc))
+        return z_loc, z_scale
+
+
+class DecoderCIFAR10Conv(nn.Module):
+    def __init__(self, z_dim):
+        super().__init__()
+        self.fc = nn.Linear(z_dim, 128 * 4 * 4)
+        self.deconv1 = nn.ConvTranspose2d(
+            128, 64, kernel_size=4, stride=2, padding=1
+        )
+        self.bn1 = nn.BatchNorm2d(64)
+        self.deconv2 = nn.ConvTranspose2d(
+            64, 32, kernel_size=4, stride=2, padding=1
+        )
+        self.bn2 = nn.BatchNorm2d(32)
+        self.deconv3 = nn.ConvTranspose2d(
+            32, 3, kernel_size=4, stride=2, padding=1
+        )
+        self.bn3 = nn.BatchNorm2d(3)
+        self.relu = nn.ReLU()
+
+    def forward(self, z):
+        y = self.relu(self.fc(z))
+        y = y.view(
+            y.size(0), 128, 4, 4
+        )  # Reshape to match the dimensions before deconvolution
+        y = self.relu(self.bn1(self.deconv1(y)))
+        y = self.relu(self.bn2(self.deconv2(y)))
+        y = torch.sigmoid(self.bn3(self.deconv3(y)))
+        return y
 
 
 class Encoder(nn.Module):
@@ -86,7 +143,8 @@ class Decoder(nn.Module):
         y = self.relu(self.fc2(y))
         y = torch.sigmoid(self.fc3(y))
         return y
-    
+
+
 class CVAECIFAR(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
@@ -105,7 +163,9 @@ class CVAECIFAR(nn.Module):
 
             # Sample latent variable z from prior
             prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
+            zs = pyro.sample(
+                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
+            )
 
             # Generate output image loc from z
             loc = self.generation_net(zs)
@@ -137,6 +197,60 @@ class CVAECIFAR(nn.Module):
 
             pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
+
+class CVAECIFARConv(nn.Module):
+    def __init__(self, z_dim, pre_trained_baseline_net):
+        super().__init__()
+        self.baseline_net = pre_trained_baseline_net
+        self.prior_net = EncoderCIFAR10Conv(z_dim)
+        self.generation_net = DecoderCIFAR10Conv(z_dim)
+        self.recognition_net = EncoderCIFAR10Conv(z_dim)
+
+    def model(self, xs, ys=None):
+        pyro.module("generation_net", self)
+        batch_size = xs.shape[0]
+        with pyro.plate("data"):
+            # Generate initial guess using baseline network
+            with torch.no_grad():
+                y_hat = self.baseline_net(xs).view(batch_size, 3, 32, 32)
+
+            # Sample latent variable z from prior
+            prior_loc, prior_scale = self.prior_net(xs, y_hat)
+            zs = pyro.sample(
+                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
+            )
+
+            # Generate output image loc from z
+            loc = self.generation_net(zs)
+
+            if ys is not None:
+                # In training, only evaluate loss on masked pixels
+                mask_loc = loc[xs == -1].view(batch_size, -1)
+                mask_ys = ys[xs == -1].view(batch_size, -1)
+                pyro.sample(
+                    "y",
+                    dist.Bernoulli(mask_loc, validate_args=False).to_event(1),
+                    obs=mask_ys,
+                )
+            else:
+                # In testing, return probabilities for visualization
+                pyro.deterministic("y", loc.detach())
+
+            return loc
+
+    def guide(self, xs, ys=None):
+        with pyro.plate("data"):
+            if ys is None:
+                # Inference uses the prior network
+                y_hat = self.baseline_net(xs).view(xs.shape)
+                loc, scale = self.prior_net(xs, y_hat)
+            else:
+                # Training uses the recognition network
+                loc, scale = self.recognition_net(xs, ys)
+
+            pyro.sample("z", dist.Normal(loc, scale).to_event(1))
+
+
 class CVAE(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net):
         super().__init__()
@@ -165,7 +279,9 @@ class CVAE(nn.Module):
             # sample the handwriting style from the prior distribution, which is
             # modulated by the input xs.
             prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
+            zs = pyro.sample(
+                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
+            )
 
             # the output y is generated from the distribution pθ(y|x, z)
             loc = self.generation_net(zs)
@@ -216,7 +332,8 @@ def train(
     dataset,
     z_dim=200,
     hidden_1=500,
-    hidden_2=500
+    hidden_2=500,
+    use_conv=False,
 ):
     # clear param store
     pyro.clear_param_store()
@@ -224,7 +341,12 @@ def train(
     if dataset == "mnist":
         cvae_net = CVAE(200, 500, 500, pre_trained_baseline_net)
     elif dataset == "cifar10":
-        cvae_net = CVAECIFAR(200, 500, 500, pre_trained_baseline_net)
+        if use_conv:
+            cvae_net = CVAECIFARConv(z_dim, pre_trained_baseline_net)
+        else:
+            cvae_net = CVAECIFAR(
+                z_dim, hidden_1, hidden_2, pre_trained_baseline_net
+            )
     elif dataset == "fashionmnist":
         cvae_net = CVAE(z_dim, hidden_1, hidden_2, pre_trained_baseline_net)
     else:
