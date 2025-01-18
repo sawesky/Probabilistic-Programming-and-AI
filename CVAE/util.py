@@ -16,14 +16,19 @@ from tqdm import tqdm
 
 from pyro.infer import Predictive, Trace_ELBO
 
-def get_data(num_quadrant_inputs, batch_size, dataset_name="mnist"):
+
+def get_data(
+    num_quadrant_inputs, batch_size, dataset_name="mnist", random_mask=False
+):
     if dataset_name == "mnist":
         datasets, dataloaders, dataset_sizes = get_data_MNIST(
             num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
         )
     elif dataset_name == "cifar10":
         datasets, dataloaders, dataset_sizes = get_data_CIFAR10(
-            num_quadrant_inputs=num_quadrant_inputs, batch_size=batch_size
+            num_quadrant_inputs=num_quadrant_inputs,
+            batch_size=batch_size,
+            random_mask=random_mask,
         )
     elif dataset_name == "fashionmnist":
         datasets, dataloaders, dataset_sizes = get_data_FashionMNIST(
@@ -55,7 +60,8 @@ def imshow(inp, image_path=None):
         plt.show()
 
     plt.clf()
-    
+
+
 def imshowCIFAR10(inp, image_path=None):
     # plot images for CIFAR-10
     inp = inp.cpu().numpy().transpose((1, 2, 0))  # (C, H, W) -> (H, W, C)
@@ -77,7 +83,8 @@ def imshowCIFAR10(inp, image_path=None):
         plt.show()
 
     plt.clf()
-    
+
+
 def visualizeCIFAR10(
     device,
     num_quadrant_inputs,
@@ -86,11 +93,17 @@ def visualizeCIFAR10(
     num_images,
     num_samples,
     image_path=None,
+    random_mask=False,
 ):
     datasets, _, _ = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images, dataset_name="cifar10"
+        num_quadrant_inputs=num_quadrant_inputs,
+        batch_size=num_images,
+        dataset_name="cifar10",
+        random_mask=random_mask,
     )
-    dataloader = DataLoader(datasets["val"], batch_size=num_images, shuffle=True)
+    dataloader = DataLoader(
+        datasets["val"], batch_size=num_images, shuffle=True
+    )
 
     batch = next(iter(dataloader))
     inputs = batch["input"].to(device)
@@ -101,9 +114,13 @@ def visualizeCIFAR10(
         baseline_preds = pre_trained_baseline(inputs).view(outputs.shape)
 
     predictive = Predictive(
-        pre_trained_cvae.model, guide=pre_trained_cvae.guide, num_samples=num_samples
+        pre_trained_cvae.model,
+        guide=pre_trained_cvae.guide,
+        num_samples=num_samples,
     )
-    cvae_preds = predictive(inputs)["y"].view(num_samples, num_images, 3, 32, 32)
+    cvae_preds = predictive(inputs)["y"].view(
+        num_samples, num_images, 3, 32, 32
+    )
 
     # Apply the masking logic for RGB images
     baseline_preds[outputs == -1] = inputs[outputs == -1]
@@ -114,7 +131,9 @@ def visualizeCIFAR10(
     inputs_tensor = make_grid(inputs, nrow=num_images, padding=0)
     originals_tensor = make_grid(originals, nrow=num_images, padding=0)
     baseline_tensor = make_grid(baseline_preds, nrow=num_images, padding=0)
-    cvae_tensor = make_grid(cvae_preds.view(-1, 3, 32, 32), nrow=num_images, padding=0)
+    cvae_tensor = make_grid(
+        cvae_preds.view(-1, 3, 32, 32), nrow=num_images, padding=0
+    )
 
     separator_tensor = torch.ones((3, 5, originals_tensor.shape[-1])).to(device)
 
@@ -132,7 +151,6 @@ def visualizeCIFAR10(
     )
 
     imshow(grid_tensor, image_path=image_path)
-
 
 
 def visualize(
@@ -153,11 +171,15 @@ def visualize(
     elif dataset == "fashionmnist":
         # Load sample random data
         datasets, _, dataset_sizes = get_data(
-            num_quadrant_inputs=num_quadrant_inputs, batch_size=num_images, dataset_name="fashionmnist"
+            num_quadrant_inputs=num_quadrant_inputs,
+            batch_size=num_images,
+            dataset_name="fashionmnist",
         )
     else:
         raise ValueError("Dataset not supported")
-    dataloader = DataLoader(datasets["val"], batch_size=num_images, shuffle=True)
+    dataloader = DataLoader(
+        datasets["val"], batch_size=num_images, shuffle=True
+    )
 
     batch = next(iter(dataloader))
     inputs = batch["input"].to(device)
@@ -169,7 +191,9 @@ def visualize(
         baseline_preds = pre_trained_baseline(inputs).view(outputs.shape)
 
     predictive = Predictive(
-        pre_trained_cvae.model, guide=pre_trained_cvae.guide, num_samples=num_samples
+        pre_trained_cvae.model,
+        guide=pre_trained_cvae.guide,
+        num_samples=num_samples,
     )
     cvae_preds = predictive(inputs)["y"].view(num_samples, num_images, 28, 28)
 
@@ -216,7 +240,8 @@ def visualize(
     )
     # plot tensors
     imshow(grid_tensor, image_path=image_path)
-    
+
+
 def generate_table_CIFAR10(
     device,
     num_quadrant_inputs,
@@ -228,7 +253,9 @@ def generate_table_CIFAR10(
 ):
     # Load data
     datasets, dataloaders, dataset_sizes = get_data(
-        num_quadrant_inputs=num_quadrant_inputs, batch_size=32, dataset_name=dataset_name
+        num_quadrant_inputs=num_quadrant_inputs,
+        batch_size=32,
+        dataset_name=dataset_name,
     )
 
     # Define loss functions
@@ -239,7 +266,9 @@ def generate_table_CIFAR10(
     cvae_mc_cll = 0.0
     num_preds = 0
 
-    df = pd.DataFrame(index=["NN (baseline)", "CVAE (Monte Carlo)"], columns=[col_name])
+    df = pd.DataFrame(
+        index=["NN (baseline)", "CVAE (Monte Carlo)"], columns=[col_name]
+    )
 
     # Iterate over validation data
     bar = tqdm(dataloaders["val"], desc="Generating predictions".ljust(20))
@@ -250,7 +279,9 @@ def generate_table_CIFAR10(
 
         # Compute negative log-likelihood for baseline NN
         with torch.no_grad():
-            preds = pre_trained_baseline(inputs).view(outputs.shape)  # Ensure shape matches outputs
+            preds = pre_trained_baseline(inputs).view(
+                outputs.shape
+            )  # Ensure shape matches outputs
         baseline_cll += criterion(preds, outputs).item() / inputs.size(0)
 
         # Compute the negative conditional log-likelihood for the CVAE
@@ -262,7 +293,6 @@ def generate_table_CIFAR10(
     df.iloc[0, 0] = baseline_cll / num_preds
     df.iloc[1, 0] = cvae_mc_cll / num_preds
     return df
-
 
 
 def generate_table(
@@ -282,7 +312,9 @@ def generate_table(
     elif dataset == "fashionmnist":
         # Load sample random data
         datasets, dataloaders, dataset_sizes = get_data(
-            num_quadrant_inputs=num_quadrant_inputs, batch_size=32, dataset_name="fashionmnist"
+            num_quadrant_inputs=num_quadrant_inputs,
+            batch_size=32,
+            dataset_name="fashionmnist",
         )
     else:
         raise ValueError("Dataset not supported")
@@ -295,7 +327,9 @@ def generate_table(
     cvae_mc_cll = 0.0
     num_preds = 0
 
-    df = pd.DataFrame(index=["NN (baseline)", "CVAE (Monte Carlo)"], columns=[col_name])
+    df = pd.DataFrame(
+        index=["NN (baseline)", "CVAE (Monte Carlo)"], columns=[col_name]
+    )
 
     # Iterate over data.
     bar = tqdm(dataloaders["val"], desc="Generating predictions".ljust(20))
