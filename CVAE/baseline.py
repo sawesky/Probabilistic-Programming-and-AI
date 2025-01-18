@@ -26,7 +26,6 @@ class BaselineNet(nn.Module):
         y = torch.sigmoid(self.fc3(hidden))
         return y
 
-
 class BaselineNetCIFAR10(nn.Module):
     def __init__(self, hidden_1, hidden_2):
         super().__init__()
@@ -67,7 +66,7 @@ def train(
     num_epochs,
     early_stop_patience,
     model_path,
-    dataset,
+    dataset
 ):
     # Train baseline
     if dataset == "mnist":
@@ -77,7 +76,7 @@ def train(
     elif dataset == "fashionmnist":
         baseline_net = BaselineNet(500, 500)
     else:
-        raise ValueError(f"Dataset {dataset} not supported")
+        raise ValueError("Dataset not supported")
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
     criterion = MaskedBCELoss()
@@ -95,8 +94,7 @@ def train(
             num_preds = 0
 
             bar = tqdm(
-                dataloaders[phase],
-                desc="NN Epoch {} {}".format(epoch, phase).ljust(20),
+                dataloaders[phase], desc="NN Epoch {} {}".format(epoch, phase).ljust(20)
             )
             for i, batch in enumerate(bar):
                 inputs = batch["input"].to(device)
