@@ -65,7 +65,7 @@ def main(args):
 
         # Train baseline
         if args.allow_baseline_reuse and os.path.exists(
-            "baseline_net_q{}.pth".format(num_quadrant_inputs)
+           "baseline_net_q{}.pth".format(num_quadrant_inputs)
         ):
             print("Reusing pre-trained baseline model")
             baseline_net = torch.load(
@@ -81,7 +81,9 @@ def main(args):
                 early_stop_patience=args.early_stop_patience,
                 model_path="baseline_net_q{}.pth".format(num_quadrant_inputs),
                 dataset=args.dataset,
-            )
+                hidden_1=args.hidden_1,
+                hidden_2=args.hidden_2
+                )
 
         # Train CVAE
         cvae_net = cvae.train(
@@ -102,6 +104,7 @@ def main(args):
             hidden_1=args.hidden_1,
             hidden_2=args.hidden_2,
             use_conv=args.use_conv,
+            random_mask=args.random_mask
         )
 
         # Visualize conditional predictions

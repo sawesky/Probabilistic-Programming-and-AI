@@ -42,7 +42,6 @@ class BaselineNetCIFAR10(nn.Module):
         y = torch.sigmoid(self.fc3(hidden))
         return y
 
-
 class MaskedBCELoss(nn.Module):
     def __init__(self, masked_with=-1):
         super().__init__()
@@ -58,7 +57,6 @@ class MaskedBCELoss(nn.Module):
         )
         return loss.sum()
 
-
 def train(
     device,
     dataloaders,
@@ -68,19 +66,24 @@ def train(
     early_stop_patience,
     model_path,
     dataset,
+    hidden_1,
+    hidden_2
 ):
+    
+    criterion = MaskedBCELoss()
     # Train baseline
     if dataset == "mnist":
         baseline_net = BaselineNet(500, 500)
     elif dataset == "cifar10":
         baseline_net = BaselineNetCIFAR10(500, 500)
     elif dataset == "fashionmnist":
-        baseline_net = BaselineNet(500, 500)
+        baseline_net = BaselineNet(hidden_1, hidden_2)
     else:
         raise ValueError(f"Dataset {dataset} not supported")
+    
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
-    criterion = MaskedBCELoss()
+    
     best_loss = np.inf
     early_stop_count = 0
 

@@ -330,10 +330,11 @@ def train(
     model_path,
     pre_trained_baseline_net,
     dataset,
-    z_dim=200,
-    hidden_1=500,
-    hidden_2=500,
-    use_conv=False,
+    z_dim,
+    hidden_1,
+    hidden_2,
+    use_conv,
+    random_mask
 ):
     # clear param store
     pyro.clear_param_store()
