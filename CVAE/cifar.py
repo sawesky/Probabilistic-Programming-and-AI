@@ -160,8 +160,8 @@ def get_data_CIFAR10(num_quadrant_inputs, batch_size, random_mask=False):
         if not random_mask
         else Compose(
             [
-                #ToTensorResize(),
-                ToTensor(),
+                ToTensorResize(),
+                #ToTensor(),
                 RandomlyMaskImages(num_quadrant_inputs=num_quadrant_inputs),
             ]
         )
