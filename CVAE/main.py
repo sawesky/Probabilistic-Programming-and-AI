@@ -82,7 +82,8 @@ def main(args):
                 model_path="baseline_net_q{}.pth".format(num_quadrant_inputs),
                 dataset=args.dataset,
                 hidden_1=args.hidden_1,
-                hidden_2=args.hidden_2
+                hidden_2=args.hidden_2,
+                pretrained=args.pretrained
                 )
 
         # Train CVAE
@@ -104,7 +105,8 @@ def main(args):
             hidden_1=args.hidden_1,
             hidden_2=args.hidden_2,
             use_conv=args.use_conv,
-            random_mask=args.random_mask
+            random_mask=args.random_mask,
+            pretrained=args.pretrained
         )
 
         # Visualize conditional predictions

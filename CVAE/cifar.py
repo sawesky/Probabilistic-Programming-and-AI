@@ -4,6 +4,7 @@ import random
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, functional
+from torchvision.transforms import Normalize, Resize
 
 
 class CVAECIFAR10(Dataset):
@@ -22,7 +23,6 @@ class CVAECIFAR10(Dataset):
 
         return sample
 
-
 class ToTensor:
     def __call__(self, sample):
         sample["original"] = functional.to_tensor(sample["original"])
@@ -31,6 +31,19 @@ class ToTensor:
         )
         return sample
 
+class ToTensorResize:
+    def __init__(self):
+        self.resize = Resize((224, 224))  # Resize images for ResNet
+        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Normalize for ResNet
+
+    def __call__(self, sample):
+        # Resize and convert to tensor
+        sample["original"] = self.resize(functional.to_tensor(sample["original"]))
+        sample["original"] = self.normalize(sample["original"])  # Normalize image
+        sample["label"] = torch.as_tensor(
+            np.asarray(sample["label"]), dtype=torch.int64
+        )
+        return sample
 
 class MaskImages:
     """This transformation masks parts of the CIFAR-10 images for the tutorial."""
@@ -147,6 +160,7 @@ def get_data_CIFAR10(num_quadrant_inputs, batch_size, random_mask=False):
         if not random_mask
         else Compose(
             [
+                #ToTensorResize(),
                 ToTensor(),
                 RandomlyMaskImages(num_quadrant_inputs=num_quadrant_inputs),
             ]
