@@ -28,9 +28,10 @@ If you pick a hard problem, then all of your effort will probably go towards fin
 
 Rezultati u res, gledati samo slike ove brojke moraju biti ispravljene, same stvari oko modela se nisu mnogo promenile
 
+Nije nesto mnogo kod diran
 
 
 Ovo za probati jos:
 spline / conditionalarnn, flow difference
- 
+
 moze vec prez da se radi
