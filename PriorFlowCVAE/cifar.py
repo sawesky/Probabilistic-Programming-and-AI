@@ -6,7 +6,6 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, functional
 
 
-
 class CVAECIFAR10(Dataset):
     def __init__(self, root, train=True, transform=None, download=False):
         self.original = CIFAR10(root, train=train, download=download)
@@ -141,7 +140,7 @@ class RandomlyMaskImages:
 
 
 def get_data_CIFAR10(num_quadrant_inputs, batch_size, random_mask=False):
-    
+
     transforms = (
         Compose(
             [

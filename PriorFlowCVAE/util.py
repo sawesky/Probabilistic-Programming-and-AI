@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from baseline import MaskedBCELoss
+from baseline import MaskedBCELoss, MaskedNLLLoss
 from mnist import get_data_MNIST, get_data_FashionMNIST
 from cifar import get_data_CIFAR10
 from torch.utils.data import DataLoader
@@ -259,7 +259,7 @@ def generate_table_CIFAR10(
     )
 
     # Define loss functions
-    criterion = MaskedBCELoss()  # Ensure it supports multi-channel images
+    criterion = MaskedNLLLoss() # must for a normal dist
     loss_fn = Trace_ELBO(num_particles=num_particles).differentiable_loss
 
     baseline_cll = 0.0

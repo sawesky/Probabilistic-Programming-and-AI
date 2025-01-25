@@ -17,11 +17,11 @@ from torch.nn.utils import clip_grad_norm_
 
 
 class FlowPrior(nn.Module):
-    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=3, device="cuda:0"):
+    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=2, device="cuda:0"):
         super().__init__()
         self.base_prior = Encoder(z_dim, hidden_1, hidden_2)  # base Gaussian prior
         self.flows = ComposeTransform([
-            AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_1])).to(device)
+            AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_2, hidden_2])).to(device)
             for _ in range(num_flows)
         ])
 
@@ -37,7 +37,7 @@ class FlowPrior(nn.Module):
 class FlowPriorCIFAR10(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, num_flows=2, device="cuda:0"):
         super().__init__()
-        self.base_prior = EncoderCIFAR10(z_dim, hidden_1, hidden_2)  # base Gaussian prior
+        self.base_prior = EncoderCIFAR10Conv(z_dim, hidden_1, hidden_2)  # base Gaussian prior
         self.flows = ComposeTransform([
             AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_2, hidden_2])).to(device)
             for _ in range(num_flows)
@@ -145,7 +145,7 @@ class DecoderCIFAR10Conv(nn.Module):
         )  # Reshape to match the dimensions before deconvolution
         y = self.relu(self.bn1(self.deconv1(y)))
         y = self.relu(self.bn2(self.deconv2(y)))
-        y = torch.sigmoid(self.bn3(self.deconv3(y)))
+        y = self.bn3(self.deconv3(y)) 
         return y
 
 

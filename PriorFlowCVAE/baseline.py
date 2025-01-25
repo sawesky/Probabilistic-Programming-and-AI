@@ -29,25 +29,6 @@ class BaselineNet(nn.Module):
         return y
 
 
-class BaselineCNN(nn.Module):
-    def __init__(self, hidden_1, hidden_2):
-        super().__init__()
-        self.fc1 = nn.Linear(784, hidden_1)
-        self.fc2 = nn.Linear(hidden_1, hidden_2)
-        self.fc3 = nn.Linear(hidden_2, hidden_1)
-        self.fc4 = nn.Linear(hidden_1, 784)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        x = x.view(-1, 784)
-        hidden = self.relu(self.fc1(x))
-        hidden = self.relu(self.fc2(hidden))
-        hidden = self.relu(self.fc3(hidden))
-        y = torch.sigmoid(self.fc4(hidden))
-        return y
-
-
-
 class BaselineNetCIFAR10(nn.Module):
     def __init__(self, hidden_1, hidden_2):
         super().__init__()
@@ -62,7 +43,7 @@ class BaselineNetCIFAR10(nn.Module):
         hidden = self.relu(self.fc1(x))
         hidden = self.relu(self.fc2(hidden))
         hidden = self.relu(self.fc3(hidden))
-        y = torch.sigmoid(self.fc4(hidden))
+        y = self.fc4(hidden)
         return y
 
 
@@ -82,20 +63,23 @@ class MaskedBCELoss(nn.Module):
         return loss.sum()
 
 
-class MaskedMSELoss(nn.Module):
-    def __init__(self, masked_with=-1):
+class MaskedNLLLoss(nn.Module):
+    def __init__(self, masked_with=-1, sigma=0.05):
         super().__init__()
         self.masked_with = masked_with
+        self.sigma = torch.tensor(sigma, dtype=torch.float32)
 
     def forward(self, input, target):
         target = target.view(input.shape)
-        # only calculate loss on target pixels (value = -1)
-        loss = F.mse_loss(
-            input[target != self.masked_with],
-            target[target != self.masked_with],
-            reduction="none",
-        )
-        return loss.sum()
+        mask = target != self.masked_with
+        input = input[mask]
+        target = target[mask]
+
+        # log likelihood for a normal dist
+        mse_term = ((input - target) ** 2) / (2 * self.sigma ** 2)
+        normalization_term = torch.log(2 * torch.pi * self.sigma ** 2) / 2
+        nll = mse_term + normalization_term
+        return nll.sum() 
 
 
 def train(
@@ -109,21 +93,17 @@ def train(
     dataset,
 ):
     # Train baseline
-    if dataset == "mnist":
+    if dataset == "mnist" or dataset == "fashionmnist":
         baseline_net = BaselineNet(700, 600)
         criterion = MaskedBCELoss()
     elif dataset == "cifar10":
         baseline_net = BaselineNetCIFAR10(1500, 1000)
-        criterion = MaskedBCELoss()
-        #return baseline_net
-    elif dataset == "fashionmnist":
-        baseline_net = BaselineNet(700, 600)
-        criterion = MaskedBCELoss()
+        criterion = MaskedNLLLoss()
     else:
         raise ValueError(f"Dataset {dataset} not supported")
+
     baseline_net.to(device)
     optimizer = torch.optim.Adam(baseline_net.parameters(), lr=learning_rate)
-    #criterion = MaskedBCELoss()
     best_loss = np.inf
     early_stop_count = 0
 

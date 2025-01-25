@@ -43,13 +43,13 @@ def main(args):
             # Dataset
             datasets, dataloaders, dataset_sizes = get_data(
                 num_quadrant_inputs=num_quadrant_inputs,
-                batch_size=512,
+                batch_size=1024,
             )
         elif args.dataset == "cifar10":
             # Dataset
             datasets, dataloaders, dataset_sizes = get_data(
                 num_quadrant_inputs=num_quadrant_inputs,
-                batch_size=512,
+                batch_size=1024,
                 dataset_name="cifar10",
                 random_mask=args.random_mask,
             )
@@ -57,7 +57,7 @@ def main(args):
             # Dataset
             datasets, dataloaders, dataset_sizes = get_data(
                 num_quadrant_inputs=num_quadrant_inputs,
-                batch_size=512,
+                batch_size=1024,
                 dataset_name="fashionmnist",
             )
         else:
@@ -187,7 +187,7 @@ def main(args):
                 pre_trained_cvae=cvae_net,
                 num_images=args.num_images,
                 num_samples=args.num_samples,
-                image_path="cvae{}{}_plot_q{}.png".format(
+                image_path="cvae{}{}_plotCIFAR_q{}.png".format(
                     "_rand_mask" if args.random_mask else "",
                     "_conv" if args.use_conv else "",
                     num_quadrant_inputs,
@@ -202,7 +202,7 @@ def main(args):
                 pre_trained_cvae=cvae_net,
                 num_images=args.num_images,
                 num_samples=args.num_samples,
-                image_path="cvae_plot_q{}.png".format(num_quadrant_inputs),
+                image_path="cvae_plotfash_q{}.png".format(num_quadrant_inputs),
                 dataset="fashionmnist",
             )
         else:
