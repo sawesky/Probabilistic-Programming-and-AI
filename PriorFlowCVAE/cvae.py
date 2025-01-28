@@ -11,45 +11,97 @@ from tqdm import tqdm
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
-from pyro.distributions.transforms import AffineAutoregressive, ComposeTransform, Spline
+from pyro.distributions.transforms import AffineAutoregressive, SplineCoupling, spline_coupling, ComposeTransform, Transform
 from pyro.nn import AutoRegressiveNN
 from torch.nn.utils import clip_grad_norm_
 
 
 class FlowPrior(nn.Module):
-    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=2, device="cuda:0"):
+    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=15, device="cuda:0"):
         super().__init__()
         self.base_prior = Encoder(z_dim, hidden_1, hidden_2)  # base Gaussian prior
         self.flows = ComposeTransform([
-            AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_2, hidden_2])).to(device)
+            SplineCoupling(input_dim=z_dim, count_bins=5, bound=1.0).to(device)
             for _ in range(num_flows)
         ])
 
     def forward(self, x, y_pred):
         # base normal dist prior parameters
         base_loc, base_scale = self.base_prior(x, y_pred)
+        base_scale = torch.clamp(base_scale, min=1e-5, max=1.0)
         base_dist = dist.Normal(base_loc, base_scale).to_event(1)
         # apply flow transformation
         flow_dist = dist.TransformedDistribution(base_dist, self.flows)
         return flow_dist
 
+class RadialFlow(Transform):
+    def __init__(self, dim, device="cuda:0"):
+        super().__init__()
+        self.dim = dim
+        self.device = device
+        self.u = nn.Parameter(torch.randn(dim, device=device))  # learnable parameters
+        self.alpha = nn.Parameter(torch.tensor(0.0, device=device))  # scalar learnable parameter
+        self.z_0 = nn.Parameter(torch.randn(dim, device=device))  # center of radial flow
+
+    @property
+    def domain(self):
+        return dist.constraints.real
+
+    @property
+    def codomain(self):
+        return dist.constraints.real
+
+    def _call(self, z):
+        r = torch.norm(z - self.z_0, dim=-1, keepdim=True)
+        h = 1 / (1 + torch.exp(-r))
+        z_next = z + self.u * h
+        return z_next
+
+    def log_abs_det_jacobian(self, z, y=None):
+        r = torch.norm(z - self.z_0, dim=-1, keepdim=True)
+        h = 1 / (1 + torch.exp(-r))
+        h_prime = h * (1 - h)
+        det_jacobian = 1 + torch.dot(self.u, self.u) * h_prime
+        return torch.log(det_jacobian.abs()).sum(dim=-1)
+
+    def _inverse(self, z):
+        z_prev = z.clone().detach()  # initialize with the current value
+        for _ in range(10):  # newton-raphson
+            r = torch.norm(z_prev - self.z_0, dim=-1, keepdim=True)
+            h = 1 / (1 + torch.exp(-r))
+            z_next = z_prev + self.u * h
+            grad = 1 + torch.dot(self.u, self.u) * h * (1 - h)
+            z_prev = z_prev - (z_next - z) / grad
+        return z_prev
+
+
 
 class FlowPriorCIFAR10(nn.Module):
-    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=2, device="cuda:0"):
+    def __init__(self, z_dim, hidden_1, hidden_2, num_flows=12, device="cuda:0"):
         super().__init__()
-        self.base_prior = EncoderCIFAR10Conv(z_dim, hidden_1, hidden_2)  # base Gaussian prior
-        self.flows = ComposeTransform([
-            AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_2, hidden_2])).to(device)
-            for _ in range(num_flows)
-        ])
+        self.base_prior = EncoderCIFAR10Conv(z_dim)  # base Gaussian prior
         #self.flows = ComposeTransform([
-        #    Spline(input_dim=z_dim,  count_bins=8, bound=5.0).to(device)
+        #    AffineAutoregressive(AutoRegressiveNN(z_dim, [hidden_2, hidden_2])).to(device)
         #    for _ in range(num_flows)
         #])
+        #self.flows = ComposeTransform([
+        #    spline_coupling(input_dim=z_dim, split_dim=z_dim // 2,
+        #    hidden_dims=[z_dim * 10, z_dim * 10],
+        #    count_bins=6,  # More bins for better smoothness
+        #    bound=5.0).to(device)
+        #for _ in range(num_flows)
+        #])
+        self.flows = ComposeTransform([
+            RadialFlow(dim=z_dim, device=device)
+            for _ in range(num_flows)
+        ])
+
 
     def forward(self, x, y_pred):
         # base normal dist prior parameters
         base_loc, base_scale = self.base_prior(x, y_pred)
+        #base_loc = torch.tanh(base_loc) # lock in [-1, 1]
+        #base_scale = torch.exp(base_scale.clamp(-4, 2))
         base_dist = dist.Normal(base_loc, base_scale).to_event(1)
         # apply flow transformation
         flow_dist = dist.TransformedDistribution(base_dist, self.flows)
@@ -145,7 +197,8 @@ class DecoderCIFAR10Conv(nn.Module):
         )  # Reshape to match the dimensions before deconvolution
         y = self.relu(self.bn1(self.deconv1(y)))
         y = self.relu(self.bn2(self.deconv2(y)))
-        y = self.bn3(self.deconv3(y)) 
+        y = self.deconv3(y)
+        #y = self.bn3(self.deconv3(y)) 
         return y
 
 
@@ -189,10 +242,10 @@ class Decoder(nn.Module):
 
 
 class CVAECIFAR(nn.Module):
-    def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net, num_flows=2):
+    def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net, num_flows=12):
         super().__init__()
         self.baseline_net = pre_trained_baseline_net
-        self.prior_net = FlowPriorCIFAR10(z_dim, hidden_1, hidden_2, num_flows)
+        self.prior_net = FlowPriorCIFAR10(z_dim, hidden_1, hidden_2, num_flows=12)
         self.generation_net = DecoderCIFAR10Conv(z_dim)
         self.recognition_net = EncoderCIFAR10Conv(z_dim)
 
@@ -201,14 +254,17 @@ class CVAECIFAR(nn.Module):
         batch_size = xs.shape[0]
         with pyro.plate("data"):
             # Generate initial guess using baseline network
-            #with torch.no_grad():
-            #    y_hat = self.baseline_net(xs).view(batch_size, 3, 32, 32)
-
+            with torch.no_grad():
+                y_hat = self.baseline_net(xs).view(batch_size, 3, 32, 32)
+            ##### flow, y_hat
             # Sample latent variable z from prior
-            #flow_prior = self.prior_net(xs, y_hat)
-
-            flow_prior = self.prior_net(xs, xs)
+            flow_prior = self.prior_net(xs, y_hat)
+            ##### flow, no_yhat
+            #flow_prior = self.prior_net(xs, xs)
             zs = pyro.sample("z", flow_prior)
+            ##### no flow, no yhat
+            #prior_loc, prior_scale = self.prior_net(xs, xs)
+            #zs = pyro.sample("z", dist.Normal(prior_loc, prior_scale).to_event(1))
 
             # Generate output image loc from z
             loc = self.generation_net(zs)
@@ -233,17 +289,24 @@ class CVAECIFAR(nn.Module):
             if ys is None:
                 # at inference time, ys is not provided. In that case,
                 # the model uses the prior network
-                #y_hat = self.baseline_net(xs).view(xs.shape)
-                #flow_prior = self.prior_net(xs, y_hat)
-                flow_prior = self.prior_net(xs, xs)
+                ##### flow, y_hat
+                y_hat = self.baseline_net(xs).view(xs.shape)
+                flow_prior = self.prior_net(xs, y_hat)
+                ##### flow, no y_hat
+                #flow_prior = self.prior_net(xs, xs)
+                ##### no flow, no y_hat
+                #loc, scale = self.prior_net(xs, xs)
             else:
                 # at training time, uses the variational distribution
                 # q(z|x,y) = normal(loc(x,y),scale(x,y))
                 loc, scale = self.recognition_net(xs, ys)
+                ##### flow 
                 base_dist = dist.Normal(loc, scale).to_event(1)
                 flow_prior = dist.TransformedDistribution(base_dist, self.prior_net.flows)
-
+            ##### flow
             pyro.sample("z", flow_prior)
+            ##### no flow
+            #pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
 
 class CVAECIFARConv(nn.Module):

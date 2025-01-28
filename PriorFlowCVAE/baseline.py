@@ -46,6 +46,30 @@ class BaselineNetCIFAR10(nn.Module):
         y = self.fc4(hidden)
         return y
 
+class BaselineNetCIFAR10CNN(nn.Module):
+    def __init__(self, hidden_1, hidden_2):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=4, stride=2, padding=1)
+        self.bn32 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1)
+        self.bn64 = nn.BatchNorm2d(64)
+        self.deconv2 = nn.ConvTranspose2d(
+            64, 32, kernel_size=4, stride=2, padding=1
+        )
+        self.deconv1 = nn.ConvTranspose2d(
+            32, 3, kernel_size=4, stride=2, padding=1
+        )
+        self.bn3 = nn.BatchNorm2d(3)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        xc = x.clone()  # Flatten CIFAR-10 images
+        xc = self.relu(self.bn32(self.conv1(xc)))
+        xc = self.relu(self.bn64(self.conv2(xc)))
+        xc = self.relu(self.bn32(self.deconv2(xc)))
+        xc = self.deconv1(xc)
+        return xc
+
 
 class MaskedBCELoss(nn.Module):
     def __init__(self, masked_with=-1):
@@ -97,7 +121,7 @@ def train(
         baseline_net = BaselineNet(700, 600)
         criterion = MaskedBCELoss()
     elif dataset == "cifar10":
-        baseline_net = BaselineNetCIFAR10(1500, 1000)
+        baseline_net = BaselineNetCIFAR10CNN(1500, 1000)
         criterion = MaskedNLLLoss()
     else:
         raise ValueError(f"Dataset {dataset} not supported")
