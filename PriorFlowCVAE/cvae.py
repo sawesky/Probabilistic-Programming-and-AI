@@ -309,59 +309,6 @@ class CVAECIFAR(nn.Module):
             #pyro.sample("z", dist.Normal(loc, scale).to_event(1))
 
 
-class CVAECIFARConv(nn.Module):
-    def __init__(self, z_dim, pre_trained_baseline_net):
-        super().__init__()
-        self.baseline_net = pre_trained_baseline_net
-        self.prior_net = EncoderCIFAR10Conv(z_dim)
-        self.generation_net = DecoderCIFAR10Conv(z_dim)
-        self.recognition_net = EncoderCIFAR10Conv(z_dim)
-
-    def model(self, xs, ys=None):
-        pyro.module("generation_net", self)
-        batch_size = xs.shape[0]
-        with pyro.plate("data"):
-            # Generate initial guess using baseline network
-            with torch.no_grad():
-                y_hat = self.baseline_net(xs).view(batch_size, 3, 32, 32)
-
-            # Sample latent variable z from prior
-            prior_loc, prior_scale = self.prior_net(xs, y_hat)
-            zs = pyro.sample(
-                "z", dist.Normal(prior_loc, prior_scale).to_event(1)
-            )
-
-            # Generate output image loc from z
-            loc = self.generation_net(zs)
-
-            if ys is not None:
-                # In training, only evaluate loss on masked pixels
-                mask_loc = loc[xs == -1].view(batch_size, -1)
-                mask_ys = ys[xs == -1].view(batch_size, -1)
-                pyro.sample(
-                    "y",
-                    dist.Bernoulli(mask_loc, validate_args=False).to_event(1),
-                    obs=mask_ys,
-                )
-            else:
-                # In testing, return probabilities for visualization
-                pyro.deterministic("y", loc.detach())
-
-            return loc
-
-    def guide(self, xs, ys=None):
-        with pyro.plate("data"):
-            if ys is None:
-                # Inference uses the prior network
-                y_hat = self.baseline_net(xs).view(xs.shape)
-                loc, scale = self.prior_net(xs, y_hat)
-            else:
-                # Training uses the recognition network
-                loc, scale = self.recognition_net(xs, ys)
-
-            pyro.sample("z", dist.Normal(loc, scale).to_event(1))
-
-
 class CVAE(nn.Module):
     def __init__(self, z_dim, hidden_1, hidden_2, pre_trained_baseline_net, num_flows = 2):
         super().__init__()
